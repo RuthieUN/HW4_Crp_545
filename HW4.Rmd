@@ -1,0 +1,429 @@
+---
+title: "HW4, CrpSci_545"
+author: "Ruth_Uwugiaren"
+date: "2023-04-19"
+output: github_document
+---
+
+```{r, echo=FALSE, include=FALSE}
+set.seed(99164)
+
+rm(list = ls())
+source("http://zzlab.net/GAPIT/gapit_functions.txt")
+
+
+data = read.delim("C:/Users/ruth.uwugiaren/Documents/WSU_Courses/Crop_Sci 545_Stat_Gen/HW4/Breedbase.txt", head=FALSE, sep = "\t")
+
+
+#Converting hmp file to numerical and subsetting the genotypic data and map
+data1<-GAPIT(G=data, output.numerical=TRUE)
+myGD=data1[[1]]
+myGM=data1[[2]]
+```
+
+
+
+###Simulation of phenotypes and perfroming GWAS using BLINK
+```{r, echo=FALSE, include=FALSE}
+
+set.seed(99164)
+
+#Subsetting the genotyping data into training and testing 
+n=nrow(myGD)
+testing=sample(n,round(n/5),replace=F)
+training=-testing
+
+#simulating the phenotype
+mySim = GAPIT.Phenotype.Simulation(GD=myGD, GM=myGM,
+                                   h2=.75,NQTN=20,QTNDist ="normal")
+
+#GWAS by BLINK using GAPIT
+myGAPIT_GWAS=GAPIT(
+  Y=mySim$Y[training,],
+  GD=myGD,
+  GM=myGM,
+  QTN.position=mySim$QTN.position,
+  PCA.total=3,
+  model ="BLINK",
+  memo="GWAS",
+  file.output=FALSE,)
+
+
+
+p=myGAPIT_GWAS[[1]]
+
+index=order(p)
+top20=index[1:20]
+tp=rbind(top20,mySim$QTN.position)
+tp=as.data.frame(tp)
+rownames(tp)=c("Top 20 markers","QTNs")
+colnames(tp)=c("M1","M2","M3","M4","M5","M6","M7","M8","M9","M10", "M11","M12","M13","M14","M15","M16","M17","M18","M19","M20")
+knitr::kable(tp)
+write.csv(tp, "tp.csv")
+
+#Detected QTN and false positives
+detected=intersect(top20,mySim$QTN.position)
+detected
+length(detected)
+falsePositive=setdiff(top20, mySim$QTN.position)
+falsePositive
+mySim$QTN.position
+
+```
+
+
+# Incoporating GWAS using discovered QTNs as covariate to perform MAS
+```{r, echo=FALSE, include=FALSE}
+set.seed(99164)
+myCV=myGAPIT_GWAS$PCA
+index=myGAPIT_GWAS$GWAS[,4]<0.05/length(myGAPIT_GWAS$GWAS[,4]) 
+myQTN=cbind(myCV,myGD[,c(FALSE,index)])
+
+
+myGAPIT_MAS <- GAPIT(
+  Y=mySim$Y[training,],
+  GD=myGD, GM=myGM,
+  CV=myQTN, 
+  model="GLM", 
+  SNP.test=FALSE,
+  memo="MAS")
+
+order=match(mySim$Y[,1],myGAPIT_MAS$Pred[,1])
+myPredMAS=myGAPIT_MAS$Pred[order,]
+cor_MAS=cor(myPredMAS[testing,8],mySim$u[testing])^2
+plot(myPredMAS[testing,8],mySim$u[testing], xlab="Predicted breeding value", ylab="Observed True breeding value")
+mtext(paste("R square =",cor_MAS, sep=""), side = 3)
+dev.copy(png,'MAS.png')
+dev.off()
+```
+
+#Genomic selection using gBLUP
+```{r, echo=FALSE, include=FALSE}
+set.seed(99164)
+
+myGAPIT_GS <- GAPIT(
+  Y=mySim$Y[training,],
+  GD=myGD, 
+  GM=myGM,
+  PCA.total=3,
+  model="gBLUP", 
+  SNP.test=FALSE,
+  memo="gBLUP")
+
+order=match(mySim$Y[,1],myGAPIT_GS$Pred[,1])
+myPredGS=myGAPIT_GS$Pred[order,]
+cor_GS=cor(myPredGS[testing,5],mySim$u[testing])^2
+plot(myPredGS[testing,5], mySim$u[testing], xlab="Predicted breeding value", ylab="Observed True breeding value")
+mtext(paste("R square=",cor_GS,sep=""), side = 3)
+dev.copy(png,'GS.png')
+dev.off()
+```
+
+
+# GWAS incoporated into GS using gBLUP kinship and QTN as Covariate 
+```{r, echo=FALSE, include=FALSE}
+set.seed(99164)
+
+myGAPITGS_MAS<- GAPIT(
+Y=mySim$Y[training,],
+GD=myGD, GM=myGM,
+CV=myQTN, 
+model="gBLUP", 
+SNP.test=FALSE,
+memo="MAS+gBLUP")
+
+order=match(mySim$Y[,1],myGAPITGS_MAS$Pred[,1])
+myPredGS_MAS=myGAPITGS_MAS$Pred[order,]
+cor_MAS_GS=cor(myPredGS_MAS[testing,8],mySim$u[testing])^2
+plot(myPredGS_MAS[testing,8],mySim$u[testing], xlab="Predicted breeding value", ylab="Observed True breeding value")
+mtext(paste("R square=",cor_MAS_GS,sep=""), side = 3)
+dev.copy(png,'GS+MAS1.png')
+dev.off()
+```
+
+
+#replicate for GWAS incoporation in MAS
+```{r, echo=FALSE, include=FALSE}
+
+set.seed(99164)
+results_MAS <-list()
+MAS_rep  <-list()
+nrep=35
+
+MAS_rep = replicate (nrep,{
+#Subsetting the genotyping data into training and testing 
+n=nrow(myGD)
+  testing=sample(n,round(n/5),replace=F)
+  training=-testing
+  
+  #simulating the phenotype
+  mySim = GAPIT.Phenotype.Simulation(GD=myGD, GM=myGM,
+                                     h2=.75,NQTN=20,QTNDist ="normal")
+  
+  #GWAS by BLINK using GAPIT
+  myGAPIT_GWAS=GAPIT(
+    Y=mySim$Y[training,],
+    GD=myGD,
+    GM=myGM,
+    QTN.position=mySim$QTN.position,
+    PCA.total=3,
+    model ="BLINK",
+    memo="GWAS",
+    file.output=FALSE,)
+  
+  myCV=myGAPIT_GWAS$PCA
+  index=myGAPIT_GWAS$GWAS[,4]<0.05/length(myGAPIT_GWAS$GWAS[,4]) 
+  myQTN=cbind(myCV,myGD[,c(FALSE,index)])
+  
+  
+  myGAPIT_MAS <- GAPIT(
+    Y=mySim$Y[training,],
+    CV=myQTN, 
+    model="GLM", 
+    SNP.test=FALSE,
+    memo="MAS")
+  
+  order=match(mySim$Y[,1],myGAPIT_MAS$Pred[,1])
+  myPredMAS=myGAPIT_MAS$Pred[order,]
+ cor_MAS_GS=cor(myPredMAS[testing,8],mySim$u[testing])^2
+results_MAS<-append(results_MAS, cor(myPredMAS[testing,8],mySim$u[testing]^2))
+})
+```
+
+
+# replicate for Genomic selection using gBLUP
+```{r, echo=FALSE, include=FALSE}
+
+set.seed(99164)
+results_GS <-list()
+
+nrep=35
+GS_rep = replicate  (nrep,{
+  
+n=nrow(myGD)
+testing=sample(n,round(n/5),replace=F)
+training=-testing
+
+mySim = GAPIT.Phenotype.Simulation(GD=myGD, GM=myGM,
+                                   h2=.75,NQTN=20,QTNDist ="normal")
+
+#GWAS by BLINK using GAPIT
+myGAPIT_GWAS=GAPIT(
+  Y=mySim$Y[training,],
+  GD=myGD,
+  GM=myGM,
+  QTN.position=mySim$QTN.position,
+  PCA.total=3,
+  model ="BLINK",
+  memo="GWAS",
+  file.output=FALSE,)
+
+myGAPIT_GS <- GAPIT(
+  Y=mySim$Y[training,],
+  GD=myGD, 
+  GM=myGM,
+  PCA.total=3,
+  model="gBLUP", 
+  SNP.test=FALSE,
+  memo="gBLUP")
+
+order=match(mySim$Y[,1],myGAPIT5$Pred[,1])
+myPredGSrep=myGAPIT5$Pred[order,]
+cor_GS=cor(myPredGSrep[testing,5],mySim$u[testing])^2
+results_GS<-append(results_GS, cor(myPredGSrep[testing,5],mySim$u[testing]))
+})
+```
+
+
+# replicate for GWAS incoporated into GS using gBLUP kinship and QTN as Covariates 
+```{r, echo=FALSE, include=FALSE}
+
+set.seed(99164)
+
+results_GS_MAS <-list()
+nrep=35
+
+MAS_GS_rep = replicate (nrep,{
+#Subsetting the genotyping data into training and testing 
+n=nrow(myGD)
+  testing=sample(n,round(n/5),replace=F)
+  training=-testing
+  
+  mySim = GAPIT.Phenotype.Simulation(GD=myGD, GM=myGM,
+                                     h2=.75,NQTN=20,QTNDist ="normal")
+  
+  #GWAS by FarmCPU using GAPIT
+  myGAPIT_GWAS = GAPIT(
+    Y=mySim$Y[training,],
+    GD=myGD,
+    GM=myGM,
+    QTN.position=mySim$QTN.position,
+    PCA.total=3,
+    model ="BLINK",
+    memo="GWAS",
+    file.output=FALSE,)
+  
+  myGAPIT_GS_MAS <- GAPIT(
+    Y=mySim$Y[training,],
+    GD=myGD, 
+    GM=myGM,
+    CV=myQTN,
+    model="gBLUP", 
+    SNP.test=FALSE,
+    memo="MAS+gBLUP")
+ 
+  
+order=match(mySim$Y[,1],myGAPIT_GS_MAS$Pred[,1])
+myPredGS_MAS=myGAPIT_GS_MAS$Pred[order,]
+cor_MAS_GS=cor(myPredGS_MAS[testing,8],mySim$u[testing])^2
+results_GS_MAS<-append(results_GS_MAS, cor(myPredGS_MAS[testing,8],mySim$u[testing]))
+})
+```
+
+
+#Visualizing the replication
+```{r, echo=FALSE, include=FALSE}
+
+box= t(as.data.frame(GS_rep))
+box1= t(as.data.frame(MAS_rep))
+box2= t(as.data.frame(MAS_GS_rep))
+new=cbind(box, box1, box2)
+new=as.data.frame(new)
+colnames(new)= c('GS', 'MAS', 'MAS_GS')
+boxplot(new)
+dev.copy(png,'boxplot.png')
+dev.off()
+
+
+#getting the mean and standard deviation of the replicates
+library(dplyr)
+
+sum1=summarize(new,
+          mean= mean(MAS),
+          sd= sd(MAS))
+
+sum2=summarize(new,
+          mean= mean(GS),
+          sd= sd(GS))
+
+
+sum3=summarize(new,
+          mean= mean(MAS_GS),
+          sd= sd(MAS_GS))
+
+totalsum=cbind(sum1, sum2,sum3)
+write.csv(totalsum, "sum.csv")
+
+```
+
+
+
+# Running the GWAS without using the training set to see the prediction accuracy and also a reduced h2 of 0.5 to compare accuracy.
+```{r, echo=FALSE, include=FALSE}
+
+set.seed(99164)
+##########################
+# without training set
+mySim = GAPIT.Phenotype.Simulation(GD=myGD, GM=myGM,
+                                   h2=.75,NQTN=20,QTNDist ="normal")
+          
+#GWAS by BLINK using GAPIT
+myGAPIT_GWAS1=GAPIT(
+  Y=mySim$Y,
+  GD=myGD,
+  GM=myGM,
+  QTN.position=mySim$QTN.position,
+  PCA.total=3,
+  model ="BLINK",
+  memo="GWAS",
+  file.output=FALSE,)
+
+myCV1=myGAPIT_GWAS1$PCA
+index1=myGAPIT_GWAS1$GWAS[,4]<0.05/length(myGAPIT_GWAS1$GWAS[,4]) 
+myQTN1=cbind(myCV1,myGD[,c(FALSE,index1)])
+
+myGAPITGS_MAS1<- GAPIT(
+  Y=mySim$Y,
+  GD=myGD, GM=myGM,
+  CV=myQTN1, 
+  model="gBLUP", 
+  SNP.test=FALSE,
+  memo="MAS+gBLUP")
+
+order1=match(mySim$Y[,1],myGAPITGS_MAS1$Pred[,1])
+myPredGS_MAS1=myGAPITGS_MAS1$Pred[order1,]
+cor_.75_WO=cor(myPredGS_MAS1[8],mySim$u)^2
+
+
+
+
+
+#################################################################
+#reduced heritability of 0.5 for GWAS without training
+set.seed(99164)
+mySim1 = GAPIT.Phenotype.Simulation(GD=myGD, GM=myGM,
+                                   h2=.5,NQTN=20,QTNDist ="normal")
+
+myGAPIT_GWAS2=GAPIT(
+  Y=mySim1$Y,
+  GD=myGD,
+  GM=myGM,
+  QTN.position=mySim$QTN.position,
+  PCA.total=3,
+  model ="BLINK",
+  memo="GWAS",
+  file.output=FALSE,)
+
+myCV2=myGAPIT_GWAS2$PCA
+index2=myGAPIT_GWAS2$GWAS[,4]<0.05/length(myGAPIT_GWAS2$GWAS[,4]) 
+myQTN2=cbind(myCV2,myGD[,c(FALSE,index2)])
+
+myGAPITGS_MAS2<- GAPIT(
+  Y=mySim1$Y,
+  GD=myGD, GM=myGM,
+  CV=myQTN2, 
+  model="gBLUP", 
+  SNP.test=FALSE,
+  memo="MAS+gBLUP")
+
+order2=match(mySim1$Y[,1],myGAPITGS_MAS2$Pred[,1])
+myPredGS_MAS2=myGAPITGS_MAS2$Pred[order2,]
+cor_.05_WO=cor(myPredGS_MAS2[8],mySim1$u)^2
+
+
+
+
+
+#################################
+##reduced heritability of 0.5 for GWAS with training set
+set.seed(99164)
+myGAPIT_GWAS3=GAPIT(
+    Y=mySim1$Y[training,],
+  GD=myGD,
+  GM=myGM,
+  QTN.position=mySim$QTN.position,
+  PCA.total=3,
+  model ="BLINK",
+  memo="GWAS",
+  file.output=FALSE,)
+
+myGAPITGS_MAS3<- GAPIT(
+  Y=mySim1$Y,
+  GD=myGD, GM=myGM,
+  CV=myQTN, 
+  model="gBLUP", 
+  SNP.test=FALSE,
+  memo="MAS+gBLUP")
+
+order3=match(mySim1$Y[,1],myGAPITGS_MAS3$Pred[,1])
+myPredGS_MAS3=myGAPITGS_MAS3$Pred[order3,]
+cor_.05W=cor(myPredGS_MAS3[testing,8],mySim1$u[testing])^2
+
+
+result=cbind(cor_MAS_GS,cor_.75_WO,cor_.05_WO, cor_.05W)
+rownames(result) <- c("Correlation")
+colnames(result) <- c("GS_MAS","Without_training@0.75", "Without_trainingset@0.5", "With_trainingset@0.5")
+knitr::kable(result)
+write.csv(result, "cor.csv")
+```
+
