@@ -282,7 +282,7 @@ results_GS_MAS<-append(results_GS_MAS, cor(myPredGS_MAS[testing,8],mySim$u[testi
 
 
 # Visualizing the replication
-```{r, echo=FALSE, include=FALSE}
+```{r, echo=FALSE}
 
 box= t(as.data.frame(GS_rep))
 box1= t(as.data.frame(MAS_rep))
