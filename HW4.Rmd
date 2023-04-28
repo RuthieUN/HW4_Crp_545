@@ -227,8 +227,8 @@ myGAPIT_GS <- GAPIT(
   SNP.test=FALSE,
   memo="gBLUP")
 
-order=match(mySim$Y[,1],myGAPIT5$Pred[,1])
-myPredGSrep=myGAPIT5$Pred[order,]
+order=match(mySim$Y[,1],myGAPIT_GS$Pred[,1])
+myPredGSrep=myGAPIT_GS$Pred[order,]
 cor_GS=cor(myPredGSrep[testing,5],mySim$u[testing])^2
 results_GS<-append(results_GS, cor(myPredGSrep[testing,5],mySim$u[testing]))
 })
