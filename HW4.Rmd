@@ -23,7 +23,7 @@ myGM=data1[[2]]
 
 
 
-###Simulation of phenotypes and perfroming GWAS using BLINK
+# Simulation of phenotypes and perfroming GWAS using BLINK
 ```{r, echo=FALSE, include=FALSE}
 
 set.seed(99164)
@@ -97,7 +97,7 @@ dev.copy(png,'MAS.png')
 dev.off()
 ```
 
-#Genomic selection using gBLUP
+# Genomic selection using gBLUP
 ```{r, echo=FALSE, include=FALSE}
 set.seed(99164)
 
@@ -120,7 +120,7 @@ dev.off()
 ```
 
 
-# GWAS incoporated into GS using gBLUP kinship and QTN as Covariate 
+# GWAS QTNs incoporated into GS using gBLUP 
 ```{r, echo=FALSE, include=FALSE}
 set.seed(99164)
 
@@ -142,7 +142,7 @@ dev.off()
 ```
 
 
-#replicate for GWAS incoporation in MAS
+# replicate for GWAS incoporation in MAS
 ```{r, echo=FALSE, include=FALSE}
 
 set.seed(99164)
@@ -281,7 +281,7 @@ results_GS_MAS<-append(results_GS_MAS, cor(myPredGS_MAS[testing,8],mySim$u[testi
 ```
 
 
-#Visualizing the replication
+# Visualizing the replication
 ```{r, echo=FALSE, include=FALSE}
 
 box= t(as.data.frame(GS_rep))
@@ -317,8 +317,7 @@ write.csv(totalsum, "sum.csv")
 ```
 
 
-
-# Running the GWAS without using the training set to see the prediction accuracy and also a reduced h2 of 0.5 to compare accuracy.
+# Invalidating the validation by running the GWAS without the training set to see the prediction accuracy and also using a reduced h2 of 0.5 to compare accuracy.
 ```{r, echo=FALSE, include=FALSE}
 
 set.seed(99164)
