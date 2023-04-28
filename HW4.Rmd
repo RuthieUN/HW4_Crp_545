@@ -46,7 +46,7 @@ myGAPIT_GWAS=GAPIT(
   PCA.total=3,
   model ="BLINK",
   memo="GWAS",
-  file.output=FALSE,)
+  file.output=TRUE,)
 
 
 
@@ -72,7 +72,7 @@ mySim$QTN.position
 ```
 
 
-# Incoporating GWAS using discovered QTNs as covariate to perform MAS
+# Incoporating GWAS to perform MAS
 ```{r, echo=FALSE, include=FALSE}
 set.seed(99164)
 myCV=myGAPIT_GWAS$PCA
